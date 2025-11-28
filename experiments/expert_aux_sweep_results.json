@@ -1,0 +1,46 @@
+[
+  {
+    "name": "8e_2k_w0.01",
+    "val_loss": 5.117504080250475,
+    "val_ppl": 166.91823475140157,
+    "config": {
+      "name": "8e_2k_w0.01",
+      "num_experts": 8,
+      "expert_top_k": 2,
+      "load_balancing_weight": 0.01
+    }
+  },
+  {
+    "name": "8e_2k_w0.001",
+    "val_loss": 5.137391363652183,
+    "val_ppl": 170.2710133171817,
+    "config": {
+      "name": "8e_2k_w0.001",
+      "num_experts": 8,
+      "expert_top_k": 2,
+      "load_balancing_weight": 0.001
+    }
+  },
+  {
+    "name": "16e_2k_w0.01",
+    "val_loss": 5.129128674723016,
+    "val_ppl": 168.86991329861308,
+    "config": {
+      "name": "16e_2k_w0.01",
+      "num_experts": 16,
+      "expert_top_k": 2,
+      "load_balancing_weight": 0.01
+    }
+  },
+  {
+    "name": "16e_2k_w0.001",
+    "val_loss": 5.138087138747076,
+    "val_ppl": 170.38952487154296,
+    "config": {
+      "name": "16e_2k_w0.001",
+      "num_experts": 16,
+      "expert_top_k": 2,
+      "load_balancing_weight": 0.001
+    }
+  }
+]

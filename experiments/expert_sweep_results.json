@@ -1,0 +1,42 @@
+[
+  {
+    "name": "baseline_8e_2k",
+    "val_loss": 5.129236036863573,
+    "val_ppl": 168.88804450726582,
+    "config": {
+      "name": "baseline_8e_2k",
+      "num_experts": 8,
+      "expert_top_k": 2
+    }
+  },
+  {
+    "name": "dense_4e_2k",
+    "val_loss": 5.168558306543738,
+    "val_ppl": 175.6614049439187,
+    "config": {
+      "name": "dense_4e_2k",
+      "num_experts": 4,
+      "expert_top_k": 2
+    }
+  },
+  {
+    "name": "sparse_16e_2k",
+    "val_loss": 5.123205449997866,
+    "val_ppl": 167.87261537849236,
+    "config": {
+      "name": "sparse_16e_2k",
+      "num_experts": 16,
+      "expert_top_k": 2
+    }
+  },
+  {
+    "name": "top1_8e_1k",
+    "val_loss": 5.33689512564323,
+    "val_ppl": 207.86630853925692,
+    "config": {
+      "name": "top1_8e_1k",
+      "num_experts": 8,
+      "expert_top_k": 1
+    }
+  }
+]

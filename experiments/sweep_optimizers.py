@@ -82,15 +82,15 @@ def get_dataloaders(config):
     return train_loader, val_loader
 
 def main():
-    logger = setup_logging(log_dir="./logs/sweep_experts")
-    logger.info("Starting Expert Configuration Sweep")
+    logger = setup_logging(log_dir="./logs/sweep_optimizers")
+    logger.info("Starting Optimizer Sweep")
     
-    # Sweep configurations: Experts & Aux Loss Weight
+    # Sweep configurations: Optimizer Hyperparams (Momentum & Weight Decay)
+    # Baseline: momentum=0.9, wd=0.2
     configs_to_test = [
-        {"name": "8e_2k_w0.01",   "num_experts": 8,  "expert_top_k": 2, "load_balancing_weight": 0.01},
-        {"name": "8e_2k_w0.001",  "num_experts": 8,  "expert_top_k": 2, "load_balancing_weight": 0.001},
-        {"name": "16e_2k_w0.01",  "num_experts": 16, "expert_top_k": 2, "load_balancing_weight": 0.01},
-        {"name": "16e_2k_w0.001", "num_experts": 16, "expert_top_k": 2, "load_balancing_weight": 0.001},
+        {"name": "high_mom_low_wd", "muon_momentum": 0.95, "weight_decay": 0.1},
+        {"name": "low_mom_high_wd", "muon_momentum": 0.85, "weight_decay": 0.3},
+        {"name": "baseline",        "muon_momentum": 0.90, "weight_decay": 0.2},
     ]
     
     results = []
@@ -100,7 +100,7 @@ def main():
     train_loader, val_loader = get_dataloaders(base_config)
     
     print("\n" + "="*50)
-    print("STARTING EXPERT & AUX LOSS SWEEP")
+    print("STARTING OPTIMIZER HYPERPARAM SWEEP")
     print("="*50)
     
     for run_cfg in configs_to_test:
@@ -108,10 +108,9 @@ def main():
         
         # Setup config
         config = MoEModelConfig()
-        config.num_experts = run_cfg["num_experts"]
-        config.expert_top_k = run_cfg["expert_top_k"]
-        config.load_balancing_weight = run_cfg["load_balancing_weight"]
-        config.max_steps = 300  # Short run for sweep
+        config.muon_momentum = run_cfg["muon_momentum"]
+        config.weight_decay = run_cfg["weight_decay"]
+        config.max_steps = 200  # Short run
         config.vocab_size = base_config.vocab_size
         
         # Train
@@ -135,14 +134,14 @@ def main():
     print(f"{'Experiment':<20} | {'Val Loss':<10} | {'Val PPL':<10} | {'Config'}")
     print("-" * 80)
     for res in results:
-        cfg_str = f"E={res['config']['num_experts']}, W={res['config']['load_balancing_weight']}"
+        cfg_str = f"Mom={res['config']['muon_momentum']}, WD={res['config']['weight_decay']}"
         print(f"{res['name']:<20} | {res['val_loss']:<10.4f} | {res['val_ppl']:<10.2f} | {cfg_str}")
     
     # Save results to file
     import json
-    with open("experiments/expert_aux_sweep_results.json", "w") as f:
+    with open("experiments/optimizer_hyperparam_sweep_results.json", "w") as f:
         json.dump(results, f, indent=2)
-    print(f"\nResults saved to experiments/expert_aux_sweep_results.json")
+    print(f"\nResults saved to experiments/optimizer_hyperparam_sweep_results.json")
 
 if __name__ == "__main__":
     main()
