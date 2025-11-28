@@ -211,15 +211,19 @@ def main():
     print("\n" + "="*70)
     
     # Save comparison results
+    differences = {
+        "val_loss": float(val_diff),
+        "val_accuracy": float(acc_diff),
+        "val_perplexity": float(ppl_diff)
+    }
+    
+    if 'train_loss' in credal_metrics and 'train_loss' in standard_metrics:
+        differences["train_loss"] = float(credal_metrics['train_loss'] - standard_metrics['train_loss'])
+    
     comparison_results = {
         "standard": standard_metrics,
         "credal": credal_metrics,
-        "differences": {
-            "train_loss": float(train_diff),
-            "val_loss": float(val_diff),
-            "val_accuracy": float(acc_diff),
-            "val_perplexity": float(ppl_diff)
-        }
+        "differences": differences
     }
     
     results_path = "./checkpoints/comparison_results.pt"
