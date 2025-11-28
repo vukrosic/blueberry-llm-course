@@ -26,7 +26,7 @@ class MoEModelConfig:
 
     # Data parameters
     max_seq_len: int = 512
-    num_documents: int = 1000  # Reduced to minimize file streaming overhead
+    num_documents: int = 10000  # Increased to prevent overfitting
     max_tokens: int = 500000
 
     # Evaluation
