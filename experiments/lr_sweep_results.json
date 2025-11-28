@@ -1,0 +1,32 @@
+[
+  {
+    "name": "lr_half",
+    "val_loss": 5.298801356536953,
+    "val_ppl": 200.09682142619374,
+    "config": {
+      "name": "lr_half",
+      "muon_lr": 0.035,
+      "adamw_lr": 0.0035
+    }
+  },
+  {
+    "name": "lr_base",
+    "val_loss": 5.134641497046353,
+    "val_ppl": 169.8034339288365,
+    "config": {
+      "name": "lr_base",
+      "muon_lr": 0.07,
+      "adamw_lr": 0.007
+    }
+  },
+  {
+    "name": "lr_double",
+    "val_loss": 5.253689862937162,
+    "val_ppl": 191.27073075507175,
+    "config": {
+      "name": "lr_double",
+      "muon_lr": 0.14,
+      "adamw_lr": 0.014
+    }
+  }
+]
