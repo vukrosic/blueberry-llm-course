@@ -1,0 +1,366 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+% Code listing style
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=single,
+    language=Python,
+    showstringspaces=false,
+    commentstyle=\color{gray},
+    keywordstyle=\color{blue},
+    stringstyle=\color{red}
+}
+
+\title{\textbf{Technical Report: Minimal Mixture-of-Experts Language Model with Muon Optimizer}}
+\author{
+    Vuk Rosić\textsuperscript{1,2} \\
+    \textsuperscript{1}Open Superintelligence Lab \\
+    \textsuperscript{2}Óbuda University
+}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This technical report presents a minimal yet efficient implementation of a Mixture-of-Experts (MoE) based language model. The model employs a decoder-only Transformer architecture enhanced with sparse MoE layers for improved parameter efficiency. Training is conducted using a hybrid optimization strategy combining the Muon optimizer for 2D weight matrices with AdamW for other parameters. The model is trained on the SmolLM Cosmopedia dataset with 384-dimensional embeddings, 6 layers, and 8 experts per MoE layer with top-2 routing. Key features include Rotary Positional Embeddings (RoPE), RMSNorm, and load balancing mechanisms to ensure efficient expert utilization. This implementation demonstrates how modern architectural innovations can be combined to create compact, trainable language models.
+\end{abstract}
+
+\section{Introduction}
+
+Large Language Models (LLMs) have demonstrated remarkable capabilities across a wide range of natural language processing tasks. However, the computational costs associated with training and deploying these models remain a significant challenge. Mixture-of-Experts (MoE) architectures offer a promising solution by enabling conditional computation, where only a subset of model parameters is activated for each input token.
+
+This report describes a minimal implementation of an MoE-based language model that incorporates several modern architectural innovations:
+\begin{itemize}
+    \item \textbf{Sparse Mixture of Experts}: Each feedforward layer is replaced with a collection of expert networks, with only the top-2 experts activated per token.
+    \item \textbf{Hybrid Optimization}: The Muon optimizer handles 2D weight matrices (benefiting from Newton-Schulz orthogonalization), while AdamW handles embeddings and normalization parameters.
+    \item \textbf{Rotary Positional Embeddings}: RoPE provides efficient positional encoding without requiring learned position embeddings.
+    \item \textbf{RMSNorm}: Root Mean Square normalization for improved training stability with lower computational cost than LayerNorm.
+\end{itemize}
+
+The goal of this implementation is to demonstrate how these components can be combined into a compact, efficient, and trainable language model suitable for educational purposes and rapid prototyping.
+
+\section{Model Architecture}
+
+\subsection{Overview}
+
+The model follows a decoder-only Transformer architecture, similar to GPT-style models. The key architectural components are:
+
+\begin{enumerate}
+    \item Token embedding layer
+    \item $N$ transformer blocks (each containing attention and MoE feedforward)
+    \item Output normalization
+    \item Language modeling head (weight-tied with token embeddings)
+\end{enumerate}
+
+\subsection{Hyperparameters}
+
+The model configuration is defined with the following hyperparameters:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Model dimension ($d_{\text{model}}$) & 384 \\
+Number of layers ($N$) & 6 \\
+Number of attention heads ($H$) & 8 \\
+Head dimension ($d_k$) & 48 \\
+Feedforward dimension ($d_{ff}$) & 1536 \\
+Number of experts ($E$) & 8 \\
+Expert top-k & 2 \\
+Maximum sequence length & 512 \\
+Vocabulary size & 49,152 \\
+Dropout rate & 0.1 \\
+\bottomrule
+\end{tabular}
+\caption{Model architecture hyperparameters}
+\label{tab:hyperparameters}
+\end{table}
+
+\subsection{Attention Mechanism}
+
+The model uses Multi-Head Attention (MHA) with Rotary Positional Embeddings. The attention mechanism can be formulated as:
+
+\begin{equation}
+\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+\end{equation}
+
+where $Q$, $K$, and $V$ are the query, key, and value matrices. The queries and keys are augmented with RoPE before computing attention scores:
+
+\begin{equation}
+Q_{\text{rope}} = \text{RoPE}(Q), \quad K_{\text{rope}} = \text{RoPE}(K)
+\end{equation}
+
+RoPE applies rotation matrices to embed absolute positional information while maintaining relative positional relationships. The implementation uses PyTorch's Flash Attention via \texttt{scaled\_dot\_product\_attention} with causal masking for efficient autoregressive generation.
+
+\subsection{Mixture of Experts Layer}
+
+Each transformer block contains a Mixture of Experts layer instead of a traditional feedforward network. The MoE layer consists of:
+
+\begin{itemize}
+    \item \textbf{Router network}: A learned linear projection that computes expert selection scores
+    \item \textbf{Expert networks}: $E = 8$ independent feedforward networks
+    \item \textbf{Top-k gating}: Selects the top-2 experts per token
+\end{itemize}
+
+\subsubsection{Expert Network}
+
+Each expert is a simple two-layer feedforward network:
+
+\begin{equation}
+\text{Expert}(x) = W_2 \cdot \text{Dropout}(\text{SiLU}(W_1 x))
+\end{equation}
+
+where $W_1 \in \mathbb{R}^{d_{ff} \times d_{\text{model}}}$ and $W_2 \in \mathbb{R}^{d_{\text{model}} \times d_{ff}}$, and SiLU is the Sigmoid Linear Unit activation function.
+
+\subsubsection{Router Mechanism}
+
+For each input token $x$, the router computes logits for all experts:
+
+\begin{equation}
+r = W_g x + \epsilon
+\end{equation}
+
+where $W_g \in \mathbb{R}^{E \times d_{\text{model}}}$ is the gating network and $\epsilon \sim \mathcal{N}(0, \sigma^2)$ is Gaussian noise (applied during training for exploration). The top-2 experts are selected:
+
+\begin{equation}
+\text{indices}, \text{weights} = \text{TopK}(\text{softmax}(r), k=2)
+\end{equation}
+
+The final MoE output is the weighted combination of selected experts:
+
+\begin{equation}
+\text{MoE}(x) = \sum_{i \in \text{top-k}} w_i \cdot \text{Expert}_i(x)
+\end{equation}
+
+\subsubsection{Load Balancing Loss}
+
+To prevent the model from routing all tokens to a few experts, a load balancing auxiliary loss is added:
+
+\begin{equation}
+\mathcal{L}_{\text{aux}} = \lambda \cdot E \sum_{i=1}^{E} f_i \cdot p_i
+\end{equation}
+
+where $f_i$ is the fraction of tokens routed to expert $i$, $p_i$ is the average routing probability to expert $i$, and $\lambda = 0.01$ is the balancing weight. This loss encourages uniform distribution of tokens across experts.
+
+\subsection{Normalization and Residual Connections}
+
+Each transformer block uses pre-normalization with RMSNorm:
+
+\begin{equation}
+\text{RMSNorm}(x) = \frac{x}{\sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2 + \epsilon}} \cdot \gamma
+\end{equation}
+
+where $\gamma$ is a learned scale parameter. The block follows a standard residual connection pattern:
+
+\begin{align}
+h_1 &= x + \text{Dropout}(\text{Attention}(\text{RMSNorm}(x))) \\
+h_2 &= h_1 + \text{Dropout}(\text{MoE}(\text{RMSNorm}(h_1)))
+\end{align}
+
+\section{Training Methodology}
+
+\subsection{Dataset}
+
+The model is trained on the SmolLM Cosmopedia dataset, a high-quality subset of educational text. The dataset is processed as follows:
+
+\begin{itemize}
+    \item \textbf{Total documents}: 10,000
+    \item \textbf{Train/validation split}: 90/10
+    \item \textbf{Tokenization}: SmolLM-135M tokenizer (49,152 vocabulary)
+    \item \textbf{Sequence length}: 512 tokens
+    \item \textbf{Processing}: Documents are concatenated and chunked into fixed-length sequences
+\end{itemize}
+
+\subsection{Optimization Strategy}
+
+A hybrid optimization approach is employed, combining two optimizers:
+
+\subsubsection{Muon Optimizer}
+
+The Muon optimizer is applied to all 2D weight matrices (excluding embeddings and normalization parameters). Muon leverages Newton-Schulz iterations for orthogonalization, which can provide better conditioning for weight matrices. Configuration:
+
+\begin{itemize}
+    \item Learning rate: 0.07
+    \item Momentum: 0.85
+\end{itemize}
+
+\subsubsection{AdamW Optimizer}
+
+AdamW handles 1D parameters (embeddings, biases, normalization scales):
+
+\begin{itemize}
+    \item Learning rate: 0.007
+    \item Weight decay: 0.3
+\end{itemize}
+
+\subsection{Training Configuration}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Batch size & 24 \\
+Gradient accumulation steps & 4 \\
+Effective batch size & 96 \\
+Maximum training steps & 1,000 \\
+Warmup ratio & 0.05 (50 steps) \\
+Gradient clipping & 1.0 \\
+Mixed precision & FP16 (AMP) \\
+Learning rate schedule & Cosine decay \\
+Evaluation frequency & Every 10 steps \\
+\bottomrule
+\end{tabular}
+\caption{Training hyperparameters}
+\label{tab:training}
+\end{table}
+
+\subsection{Learning Rate Schedule}
+
+A cosine annealing schedule with warmup is used:
+
+\begin{equation}
+\eta(t) = \begin{cases}
+\frac{t}{T_{\text{warmup}}} \cdot \eta_{\text{max}} & \text{if } t < T_{\text{warmup}} \\
+\eta_{\text{min}} + \frac{1}{2}(\eta_{\text{max}} - \eta_{\text{min}})\left(1 + \cos\left(\pi \frac{t - T_{\text{warmup}}}{T_{\text{max}} - T_{\text{warmup}}}\right)\right) & \text{otherwise}
+\end{cases}
+\end{equation}
+
+where $\eta_{\text{max}}$ is the base learning rate, $\eta_{\text{min}} = 0.1 \eta_{\text{max}}$, $T_{\text{warmup}} = 50$ steps, and $T_{\text{max}} = 1000$ steps.
+
+\subsection{Loss Function}
+
+The total loss combines cross-entropy for language modeling with the MoE auxiliary loss:
+
+\begin{equation}
+\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{CE}} + \mathcal{L}_{\text{aux}}
+\end{equation}
+
+where the cross-entropy loss is computed autoregressively:
+
+\begin{equation}
+\mathcal{L}_{\text{CE}} = -\frac{1}{T} \sum_{t=1}^{T} \log P(x_t | x_{<t})
+\end{equation}
+
+\section{Implementation Details}
+
+\subsection{Framework and Libraries}
+
+The implementation uses:
+\begin{itemize}
+    \item \textbf{PyTorch}: Core deep learning framework
+    \item \textbf{torchtune}: For Rotary Positional Embeddings
+    \item \textbf{Transformers (HuggingFace)}: For tokenizer
+    \item \textbf{Datasets (HuggingFace)}: For data loading
+\end{itemize}
+
+\subsection{Parameter Count}
+
+The model has approximately:
+\begin{itemize}
+    \item \textbf{Total parameters}: $\sim$30M (varies based on exact vocabulary size)
+    \item \textbf{Active parameters per forward pass}: $\sim$20M (65-70\% of total)
+    \item \textbf{Expert parameters}: $\sim$10M
+\end{itemize}
+
+The sparse activation of experts provides significant computational savings while maintaining model capacity.
+
+\subsection{Weight Initialization}
+
+All weights are initialized using a Gaussian distribution:
+
+\begin{itemize}
+    \item Linear layers: $\mathcal{N}(0, 0.02^2)$
+    \item Embeddings: $\mathcal{N}(0, 0.02^2)$
+    \item Biases: Zeros (where applicable)
+\end{itemize}
+
+The output language modeling head shares weights with the token embedding layer (weight tying), reducing parameters and improving sample efficiency.
+
+\subsection{Computational Efficiency}
+
+Several techniques are employed for efficient training:
+
+\begin{itemize}
+    \item \textbf{Automatic Mixed Precision (AMP)}: FP16 computation with FP32 master weights
+    \item \textbf{Flash Attention}: Memory-efficient attention via PyTorch's SDPA
+    \item \textbf{Gradient Accumulation}: Simulates larger batch sizes with limited memory
+    \item \textbf{Persistent Data Loaders}: Reuses worker processes across epochs
+\end{itemize}
+
+\section{Code Structure}
+
+The implementation is organized into modular components:
+
+\begin{itemize}
+    \item \texttt{configs/moe\_config.py}: Configuration dataclass with all hyperparameters
+    \item \texttt{models/moe\_llm.py}: Main model class (\texttt{MoEMinimalLLM})
+    \item \texttt{models/layers.py}: Transformer block, attention mechanisms
+    \item \texttt{models/components.py}: MoE layer, router, experts
+    \item \texttt{training/trainer.py}: Training loop, optimization, evaluation
+    \item \texttt{optimizers/muon.py}: Muon optimizer implementation
+    \item \texttt{train\_moe.py}: Main training script
+\end{itemize}
+
+This modular design facilitates experimentation and extension of the architecture.
+
+\section{Evaluation Metrics}
+
+The model is evaluated using standard language modeling metrics:
+
+\begin{itemize}
+    \item \textbf{Validation Loss}: Cross-entropy loss on held-out data
+    \item \textbf{Validation Accuracy}: Next-token prediction accuracy
+    \item \textbf{Perplexity}: $\text{PPL} = \exp(\mathcal{L}_{\text{CE}})$
+\end{itemize}
+
+Metrics are computed every 10 training steps to monitor convergence.
+
+\section{Conclusion}
+
+This technical report has presented a minimal Mixture-of-Experts language model implementation that combines several modern architectural innovations. The model demonstrates:
+
+\begin{itemize}
+    \item Efficient parameter usage through sparse expert activation
+    \item Effective training via hybrid Muon/AdamW optimization
+    \item Scalable architecture suitable for educational and research purposes
+    \item Clean, modular code organization for easy experimentation
+\end{itemize}
+
+The implementation serves as a foundation for understanding MoE architectures and can be extended in various directions:
+\begin{itemize}
+    \item Scaling to larger model sizes and expert counts
+    \item Exploring alternative attention mechanisms (e.g., Multi-Head Latent Attention)
+    \item Implementing more sophisticated routing strategies
+    \item Fine-tuning on downstream tasks
+\end{itemize}
+
+The complete source code is available in the project repository, providing a practical reference for implementing efficient language models with mixture-of-experts architectures.
+
+\section*{References}
+
+\begin{enumerate}
+    \item Vaswani, A., et al. (2017). "Attention is All You Need." \textit{NeurIPS}.
+    \item Shazeer, N., et al. (2017). "Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer." \textit{ICLR}.
+    \item Su, J., et al. (2021). "RoFormer: Enhanced Transformer with Rotary Position Embedding." \textit{arXiv}.
+    \item Zhang, B., \& Sennrich, R. (2019). "Root Mean Square Layer Normalization." \textit{NeurIPS}.
+    \item Loshchilov, I., & Hutter, F. (2019). "Decoupled Weight Decay Regularization." \textit{ICLR}.
+\end{enumerate}
+
+\end{document}
