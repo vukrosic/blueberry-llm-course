@@ -47,6 +47,10 @@ class MoEModelConfig:
     num_experts: int = 8
     expert_top_k: int = 2
     load_balancing_weight: float = 0.001  # Reduced from 0.01 based on exp8: improves stability
+    
+    # Credal Routing
+    use_credal_routing: bool = False
+    credal_lambda: float = 1.0
 
     def __post_init__(self):
         self.d_k = self.d_model // self.n_heads
