@@ -3,13 +3,13 @@ import os
 import torch
 import logging
 from torch.utils.data import DataLoader
+from datasets import load_dataset, Dataset
+from transformers import AutoTokenizer
 
 # Fix tokenizer parallelism warning when using DataLoader workers
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from configs.moe_config import MoEModelConfig
-from configs.dataset_config import DataConfig
-from data.loader import prepare_lm_dataset
 from training.trainer import train_moe_model
 from utils.helpers import set_seed
 from utils.logger import setup_logging
@@ -32,50 +32,64 @@ def main():
     set_seed(42)
     config = MoEModelConfig()
 
-    print("Loading dataset with Hugging Face Datasets API...")
-    data_cfg = DataConfig(
-        dataset_path="HuggingFaceTB/smollm-corpus",
-        dataset_name="cosmopedia-v2",
-        tokenizer_name="HuggingFaceTB/SmolLM-135M",
-        seq_length=config.max_seq_len,
-        num_samples=config.num_documents,
-        cache_dir="./hf_cache",
+    # Hardcoded data loading for SmolLM Cosmopedia
+    print("Loading dataset: SmolLM Cosmopedia...")
+    
+    # Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        "HuggingFaceTB/SmolLM-135M",
+        cache_dir="./hf_cache"
     )
-
-    # Split documents BEFORE tokenization to prevent data leakage
-    from datasets import load_dataset
-    print("Loading raw dataset and splitting documents...")
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    config.vocab_size = tokenizer.vocab_size
+    
+    # Load dataset and split documents
     raw_dataset = load_dataset(
-        data_cfg.dataset_path,
-        data_cfg.dataset_name,
-        split=data_cfg.split,
-        cache_dir=data_cfg.cache_dir,
+        "HuggingFaceTB/smollm-corpus",
+        "cosmopedia-v2",
+        split="train",
+        cache_dir="./hf_cache",
         streaming=True,
     )
     
-    # Take samples and split into train/val
-    raw_samples = list(raw_dataset.take(data_cfg.num_samples))
+    # Take samples and split into train/val (90/10 split)
+    raw_samples = list(raw_dataset.take(config.num_documents))
     num_val = int(len(raw_samples) * 0.1)
-    num_train = len(raw_samples) - num_val
-    
-    from datasets import Dataset
-    raw_train = Dataset.from_list(raw_samples[:num_train])
-    raw_val = Dataset.from_list(raw_samples[num_train:])
+    raw_train = Dataset.from_list(raw_samples[:len(raw_samples) - num_val])
+    raw_val = Dataset.from_list(raw_samples[len(raw_samples) - num_val:])
     logger.info(f"Split into {len(raw_train):,} train docs and {len(raw_val):,} val docs")
     
-    # Now tokenize each split separately
-    from data.loader import setup_tokenizer, tokenize_and_chunk, finalize_dataset
-    tokenizer = setup_tokenizer(data_cfg)
-    config.vocab_size = tokenizer.vocab_size
+    # Tokenize and prepare datasets
+    def tokenize_and_prepare(dataset):
+        # Tokenize
+        def tokenize_fn(examples):
+            return tokenizer(examples["text"], truncation=False, padding=False)
+        
+        tokenized = dataset.map(tokenize_fn, batched=True, remove_columns=dataset.column_names)
+        
+        # Group into fixed-length sequences
+        def group_texts(examples):
+            concatenated = {k: sum(examples[k], []) for k in examples.keys()}
+            total_length = len(concatenated["input_ids"])
+            block_size = config.max_seq_len
+            
+            # Drop last incomplete block
+            total_length = (total_length // block_size) * block_size
+            result = {
+                k: [concatenated[k][i:i + block_size] for i in range(0, total_length, block_size)]
+                for k in concatenated.keys()
+            }
+            result["labels"] = result["input_ids"].copy()
+            return result
+        
+        grouped = tokenized.map(group_texts, batched=True)
+        grouped.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+        return grouped
     
-    print("Tokenizing train set...")
-    train_ds = tokenize_and_chunk(raw_train, tokenizer, data_cfg)
-    train_ds = finalize_dataset(train_ds, data_cfg)
-    
-    print("Tokenizing validation set...")
-    val_ds = tokenize_and_chunk(raw_val, tokenizer, data_cfg)
-    val_ds = finalize_dataset(val_ds, data_cfg)
-    
+    print("Tokenizing datasets...")
+    train_ds = tokenize_and_prepare(raw_train)
+    val_ds = tokenize_and_prepare(raw_val)
     logger.info(f"Train sequences: {len(train_ds):,}, Val sequences: {len(val_ds):,}")
 
     loader_args = dict(
