@@ -1,0 +1,32 @@
+[
+  {
+    "name": "high_mom_low_wd",
+    "val_loss": 5.621221259535213,
+    "val_ppl": 276.22652159954043,
+    "config": {
+      "name": "high_mom_low_wd",
+      "muon_momentum": 0.95,
+      "weight_decay": 0.1
+    }
+  },
+  {
+    "name": "low_mom_high_wd",
+    "val_loss": 5.558560170553475,
+    "val_ppl": 259.44900494363026,
+    "config": {
+      "name": "low_mom_high_wd",
+      "muon_momentum": 0.85,
+      "weight_decay": 0.3
+    }
+  },
+  {
+    "name": "baseline",
+    "val_loss": 5.558779415906671,
+    "val_ppl": 259.50589416847663,
+    "config": {
+      "name": "baseline",
+      "muon_momentum": 0.9,
+      "weight_decay": 0.2
+    }
+  }
+]
