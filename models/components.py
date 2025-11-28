@@ -55,78 +55,6 @@ class TopKRouter(nn.Module):
         return top_k_weights, top_k_indices, router_probs
 
 
-
-class CredalRouter(nn.Module):
-    """
-    Credal Router that dynamically selects top-k experts based on epistemic uncertainty.
-    Based on 'Credal Transformer' and Evidential Deep Learning.
-    """
-    def __init__(self, d_model: int, num_experts: int, base_top_k: int = 1, credal_lambda: float = 1.0):
-        super().__init__()
-        self.num_experts = num_experts
-        self.base_top_k = base_top_k
-        self.credal_lambda = credal_lambda
-        self.gate = nn.Linear(d_model, num_experts, bias=False)
-        self.noise_std = 0.1
-        # Track expert selection statistics
-        self.expert_counts = []
-        self.uncertainties = []
-        self.selected_experts = []  # Track which experts were selected
-
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Returns:
-            - router_weights: [batch, seq, max_k] (padded with zeros if k < max_k)
-            - expert_indices: [batch, seq, max_k]
-            - router_probs: [batch, seq, num_experts]
-        """
-        batch_size, seq_len, d_model = x.shape
-        
-        # 1. Compute logits
-        logits = self.gate(x)
-        
-        if self.training and self.noise_std > 0:
-            logits = logits + torch.randn_like(logits) * self.noise_std
-            
-        # 2. Compute Evidence (softplus for stability)
-        evidence = F.softplus(logits)
-        
-        # 3. Compute Dirichlet parameters
-        alpha = evidence + 1.0
-        total_evidence = torch.sum(alpha, dim=-1, keepdim=True)
-        
-        # 4. Compute Epistemic Uncertainty (Vacuity)
-        # Normalized uncertainty: U = N / (N + S)
-        # This gives values in [0, 1] where:
-        # - High uncertainty (→1): When total_evidence is small (uncertain predictions)
-        # - Low uncertainty (→0): When total_evidence is large (confident predictions)
-        uncertainty = self.num_experts / (self.num_experts + total_evidence)  # [batch, seq, 1]
-        
-        # 5. Determine dynamic k per token
-        # k = base_k + floor(lambda * U)
-        # We need a fixed k for the batch to keep tensor shapes consistent in this implementation,
-        # so we take the mean uncertainty of the batch or max.
-        # For true per-token dynamic k, we'd need sparse tensors or masking.
-        # Here we implement a "Batch-Adaptive Top-K" for efficiency.
-        avg_uncertainty = uncertainty.mean()
-        dynamic_k = self.base_top_k + int(self.credal_lambda * avg_uncertainty.item())
-        dynamic_k = min(max(dynamic_k, 1), self.num_experts)
-        
-        # 6. Standard routing with the calculated k
-        router_probs = F.softmax(logits, dim=-1)
-        top_k_logits, top_k_indices = torch.topk(logits, dynamic_k, dim=-1)
-        top_k_weights = F.softmax(top_k_logits, dim=-1)
-        
-        # Track statistics (only during training to avoid memory issues)
-        if self.training:
-            self.expert_counts.append(dynamic_k)
-            self.uncertainties.append(avg_uncertainty.item())
-            # Store which experts were selected (sample from batch for efficiency)
-            self.selected_experts.append(top_k_indices[0, 0, :].cpu().tolist())  # First token of first batch
-        
-        return top_k_weights, top_k_indices, router_probs
-
-
 class MixtureOfExperts(nn.Module):
     """Mixture of Experts layer with top-k routing"""
     def __init__(
@@ -136,15 +64,12 @@ class MixtureOfExperts(nn.Module):
         num_experts: int = 8,
         top_k: int = 2,
         dropout: float = 0.1,
-        load_balancing_weight: float = 0.01,
-        use_credal_routing: bool = False,
-        credal_lambda: float = 1.0
+        load_balancing_weight: float = 0.01
     ):
         super().__init__()
         self.num_experts = num_experts
         self.top_k = top_k
         self.load_balancing_weight = load_balancing_weight
-        self.use_credal_routing = use_credal_routing
 
         # Create experts
         self.experts = nn.ModuleList([
@@ -152,11 +77,7 @@ class MixtureOfExperts(nn.Module):
         ])
 
         # Create router
-        if use_credal_routing:
-            # For Credal, top_k acts as the base_top_k (minimum experts)
-            self.router = CredalRouter(d_model, num_experts, base_top_k=1, credal_lambda=credal_lambda)
-        else:
-            self.router = TopKRouter(d_model, num_experts, top_k)
+        self.router = TopKRouter(d_model, num_experts, top_k)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
