@@ -20,7 +20,7 @@ class MoEModelConfig:
     # Training parameters
     gradient_accumulation_steps: int = 4
     muon_lr: float = 0.07
-    muon_momentum: float = 0.9
+    muon_momentum: float = 0.85
     adamw_lr: float = 0.007
     warmup_ratio: float = 0.05
 
@@ -34,7 +34,7 @@ class MoEModelConfig:
     eval_steps: int = 100
 
     # Regularization
-    weight_decay: float = 0.2
+    weight_decay: float = 0.3
     dropout: float = 0.1
     grad_clip: float = 1.0
 
