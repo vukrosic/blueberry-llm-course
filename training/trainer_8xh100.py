@@ -1,6 +1,6 @@
 """
-Multi-GPU trainer using PyTorch DataParallel
-Simple and straightforward data parallelism across multiple GPUs
+8x H100 GPU trainer using PyTorch DataParallel
+Simple and straightforward data parallelism across 8 H100 GPUs
 """
 import torch
 import torch.nn as nn
@@ -11,14 +11,14 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torch.amp import autocast, GradScaler
 
-from configs.moe_config_multigpu import MoEModelConfigMultiGPU
+from configs.moe_config_8xh100 import MoEModelConfig8xH100
 from models.moe_llm import MoEMinimalLLM
 from optimizers.muon import Muon
 from training.evaluation import evaluate_model
 from utils.helpers import set_seed
 
 
-def setup_muon_optimizer(model: nn.Module, config: MoEModelConfigMultiGPU):
+def setup_muon_optimizer(model: nn.Module, config: MoEModelConfig8xH100):
     """Setup Muon optimizer with hybrid approach"""
     muon_params = []
     adamw_params = []
@@ -48,20 +48,20 @@ def setup_muon_optimizer(model: nn.Module, config: MoEModelConfigMultiGPU):
     return [muon_optimizer, adamw_optimizer]
 
 
-def train_moe_model_multigpu(
-    config: MoEModelConfigMultiGPU, 
+def train_moe_model_8xh100(
+    config: MoEModelConfig8xH100, 
     train_loader: DataLoader, 
     val_loader: DataLoader
 ):
     """
-    Train the MoE model using simple DataParallel across multiple GPUs.
+    Train the MoE model using simple DataParallel across 8x H100 GPUs.
     
     This is the simplest multi-GPU approach:
     - Uses nn.DataParallel to split batches across GPUs
     - All GPUs train on different data in parallel
     - Gradients are automatically averaged across GPUs
     """
-    print(f"\n🚀 Training MoE model with DataParallel on {config.num_gpus} GPUs")
+    print(f"\n🚀 Training MoE model with DataParallel on {config.num_gpus} H100 GPUs")
     print(f"   Experts: {config.num_experts}, Top-k: {config.expert_top_k}")
     
     # Initialize model on CPU first
@@ -111,7 +111,7 @@ def train_moe_model_multigpu(
     # Training loop
     model.train()
     step = 0
-    pbar = tqdm(total=config.max_steps, desc="Training Multi-GPU")
+    pbar = tqdm(total=config.max_steps, desc="Training 8xH100")
     train_start_time = time.time()
     
     while step < config.max_steps:

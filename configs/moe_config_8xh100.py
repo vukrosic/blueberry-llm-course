@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 
 @dataclass
-class MoEModelConfigMultiGPU:
+class MoEModelConfig8xH100:
     """Configuration for 8x H100 GPUs with simple data parallelism"""
     
     # Model architecture (same as base config)

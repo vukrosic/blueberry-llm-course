@@ -14,8 +14,8 @@ from transformers import AutoTokenizer
 # Fix tokenizer parallelism warning
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-from configs.moe_config_multigpu import MoEModelConfigMultiGPU
-from training.trainer_multigpu import train_moe_model_multigpu
+from configs.moe_config_8xh100 import MoEModelConfig8xH100
+from training.trainer_8xh100 import train_moe_model_8xh100
 from utils.helpers import set_seed
 from utils.logger import setup_logging
 
@@ -25,7 +25,7 @@ def print_system_info():
     if torch.cuda.is_available():
         num_gpus = torch.cuda.device_count()
         print(f"\n{'='*70}")
-        print(f"🖥️  MULTI-GPU SETUP")
+        print(f"🖥️  8x H100 GPU SETUP")
         print(f"{'='*70}")
         print(f"Number of GPUs available: {num_gpus}")
         for i in range(num_gpus):
@@ -39,7 +39,7 @@ def print_system_info():
 
 def main():
     logger = setup_logging(log_dir="./logs")
-    logger.info("Starting Multi-GPU MoE training")
+    logger.info("Starting 8xH100 MoE training")
 
     print_system_info()
     set_seed(42)
@@ -49,7 +49,7 @@ def main():
         print(f"⚠️  WARNING: Only {torch.cuda.device_count()} GPU(s) available")
         print(f"⚠️  This script is optimized for 8 GPUs but will run on available GPUs")
     
-    config = MoEModelConfigMultiGPU()
+    config = MoEModelConfig8xH100()
     # Update num_gpus based on actual availability
     config.num_gpus = min(torch.cuda.device_count(), config.num_gpus)
     config.effective_batch_size = config.batch_size * config.num_gpus
@@ -135,11 +135,11 @@ def main():
     print(f"vocab size: {config.vocab_size}\n")
     logger.info(f"Model configuration: {vars(config)}")
 
-    print("Starting Multi-GPU Training...")
+    print("Starting 8xH100 Training...")
     print("-" * 70)
     start = time.time()
 
-    model, metrics = train_moe_model_multigpu(config, train_loader, val_loader)
+    model, metrics = train_moe_model_8xh100(config, train_loader, val_loader)
     elapsed = (time.time() - start) / 60
     logger.info("Training complete")
 
@@ -152,7 +152,7 @@ def main():
     logger.info(f"Final metrics: {metrics}")
 
     # Save checkpoint
-    ckpt_path = "./checkpoints/final_model_multigpu.pt"
+    ckpt_path = "./checkpoints/final_model_8xh100.pt"
     os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
     
     # Extract model from DataParallel wrapper if needed
