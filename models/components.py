@@ -71,6 +71,7 @@ class CredalRouter(nn.Module):
         # Track expert selection statistics
         self.expert_counts = []
         self.uncertainties = []
+        self.selected_experts = []  # Track which experts were selected
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -111,15 +112,17 @@ class CredalRouter(nn.Module):
         dynamic_k = self.base_top_k + int(self.credal_lambda * avg_uncertainty.item())
         dynamic_k = min(max(dynamic_k, 1), self.num_experts)
         
-        # Track statistics (only during training to avoid memory issues)
-        if self.training:
-            self.expert_counts.append(dynamic_k)
-            self.uncertainties.append(avg_uncertainty.item())
-        
         # 6. Standard routing with the calculated k
         router_probs = F.softmax(logits, dim=-1)
         top_k_logits, top_k_indices = torch.topk(logits, dynamic_k, dim=-1)
         top_k_weights = F.softmax(top_k_logits, dim=-1)
+        
+        # Track statistics (only during training to avoid memory issues)
+        if self.training:
+            self.expert_counts.append(dynamic_k)
+            self.uncertainties.append(avg_uncertainty.item())
+            # Store which experts were selected (sample from batch for efficiency)
+            self.selected_experts.append(top_k_indices[0, 0, :].cpu().tolist())  # First token of first batch
         
         return top_k_weights, top_k_indices, router_probs
 

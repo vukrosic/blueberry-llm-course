@@ -138,7 +138,7 @@ def run_experiment(use_credal, max_steps=50):
     print("-" * 70)
     start = time.time()
 
-    model, metrics = train_moe_model(config, train_loader, val_loader)
+    model, metrics, metrics_history = train_moe_model(config, train_loader, val_loader)
     elapsed = (time.time() - start) / 60
     logger.info("Training complete")
 
@@ -151,6 +151,46 @@ def run_experiment(use_credal, max_steps=50):
     print(f"Val accuracy:     {metrics['val_accuracy']:.4f}")
     print(f"Val perplexity:   {metrics['val_perplexity']:.2f}")
     logger.info(f"Final metrics: {metrics}")
+    
+    # Collect credal statistics if using credal routing
+    credal_stats = None
+    if use_credal:
+        # Extract credal router statistics from model
+        expert_counts_all = []
+        uncertainties_all = []
+        selected_experts_all = []
+        for block in model.transformer_blocks:
+            if hasattr(block.feed_forward.router, 'expert_counts'):
+                expert_counts_all.extend(block.feed_forward.router.expert_counts)
+                uncertainties_all.extend(block.feed_forward.router.uncertainties)
+                if hasattr(block.feed_forward.router, 'selected_experts'):
+                    selected_experts_all.extend(block.feed_forward.router.selected_experts)
+        
+        if expert_counts_all:
+            import numpy as np
+            
+            # Count expert usage
+            expert_usage = [0] * 8  # 8 experts
+            for experts in selected_experts_all:
+                for expert_id in experts:
+                    expert_usage[expert_id] += 1
+            
+            credal_stats = {
+                'expert_counts': expert_counts_all,
+                'uncertainties': uncertainties_all,
+                'selected_experts': selected_experts_all,
+                'expert_usage': expert_usage,
+                'mean_experts': np.mean(expert_counts_all),
+                'std_experts': np.std(expert_counts_all),
+                'min_experts': np.min(expert_counts_all),
+                'max_experts': np.max(expert_counts_all),
+                'mean_uncertainty': np.mean(uncertainties_all),
+            }
+            print(f"\nCredal Routing Statistics:")
+            print(f"  Mean experts selected: {credal_stats['mean_experts']:.2f} ± {credal_stats['std_experts']:.2f}")
+            print(f"  Range: [{credal_stats['min_experts']}, {credal_stats['max_experts']}]")
+            print(f"  Mean uncertainty: {credal_stats['mean_uncertainty']:.4f}")
+            print(f"  Expert usage distribution: {expert_usage}")
 
     # Save model
     ckpt_path = f"./checkpoints/{experiment_name}_model.pt"
@@ -159,14 +199,16 @@ def run_experiment(use_credal, max_steps=50):
         {
             "model_state_dict": model.state_dict(),
             "config": config,
-            "metrics": metrics
+            "metrics": metrics,
+            "metrics_history": metrics_history,
+            "credal_stats": credal_stats,
         },
         ckpt_path,
     )
     print(f"Model checkpoint saved to {ckpt_path}")
     logger.info(f"Model saved to {ckpt_path}")
     
-    return metrics
+    return metrics, metrics_history, credal_stats
 
 
 def main():
@@ -175,8 +217,8 @@ def main():
     print("="*70)
     
     # Run both experiments
-    standard_metrics = run_experiment(use_credal=False, max_steps=50)
-    credal_metrics = run_experiment(use_credal=True, max_steps=50)
+    standard_metrics, standard_history, _ = run_experiment(use_credal=False, max_steps=50)
+    credal_metrics, credal_history, credal_stats = run_experiment(use_credal=True, max_steps=50)
     
     # Compare results
     print("\n" + "="*70)
@@ -210,7 +252,7 @@ def main():
     
     print("\n" + "="*70)
     
-    # Save comparison results
+    # Save comparison results with history
     differences = {
         "val_loss": float(val_diff),
         "val_accuracy": float(acc_diff),
@@ -223,7 +265,10 @@ def main():
     comparison_results = {
         "standard": standard_metrics,
         "credal": credal_metrics,
-        "differences": differences
+        "differences": differences,
+        "standard_history": standard_history,
+        "credal_history": credal_history,
+        "credal_stats": credal_stats,
     }
     
     results_path = "./checkpoints/comparison_results.pt"
