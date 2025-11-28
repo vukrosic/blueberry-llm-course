@@ -33,6 +33,9 @@ class MoEMinimalLLM(nn.Module):
                     config.num_experts,
                     config.expert_top_k,
                     config.dropout,
+                    config.load_balancing_weight,
+                    config.use_credal_routing,
+                    config.credal_lambda,
                 )
                 for i in range(config.n_layers)
             ]

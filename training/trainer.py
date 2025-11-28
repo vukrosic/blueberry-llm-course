@@ -440,4 +440,4 @@ def train_moe_model(config: MoEModelConfig, train_loader: DataLoader, val_loader
         extra_config=None,
     )
 
-    return model, final_eval
+    return model, final_eval, metrics_history

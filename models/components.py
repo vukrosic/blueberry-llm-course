@@ -68,6 +68,9 @@ class CredalRouter(nn.Module):
         self.credal_lambda = credal_lambda
         self.gate = nn.Linear(d_model, num_experts, bias=False)
         self.noise_std = 0.1
+        # Track expert selection statistics
+        self.expert_counts = []
+        self.uncertainties = []
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -107,6 +110,11 @@ class CredalRouter(nn.Module):
         avg_uncertainty = uncertainty.mean()
         dynamic_k = self.base_top_k + int(self.credal_lambda * avg_uncertainty.item())
         dynamic_k = min(max(dynamic_k, 1), self.num_experts)
+        
+        # Track statistics (only during training to avoid memory issues)
+        if self.training:
+            self.expert_counts.append(dynamic_k)
+            self.uncertainties.append(avg_uncertainty.item())
         
         # 6. Standard routing with the calculated k
         router_probs = F.softmax(logits, dim=-1)

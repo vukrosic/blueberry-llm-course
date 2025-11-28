@@ -133,6 +133,9 @@ class MoETransformerBlock(nn.Module):
         num_experts: int = 8,
         top_k: int = 2,
         dropout: float = 0.1,
+        load_balancing_weight: float = 0.01,
+        use_credal_routing: bool = False,
+        credal_lambda: float = 1.0,
     ):
         super().__init__()
 
@@ -152,7 +155,16 @@ class MoETransformerBlock(nn.Module):
             self.attention = MultiHeadAttention(d_model, n_heads, max_seq_len, dropout)
 
         # MoE layer
-        self.feed_forward = MixtureOfExperts(d_model, d_ff, num_experts, top_k, dropout)
+        self.feed_forward = MixtureOfExperts(
+            d_model, 
+            d_ff, 
+            num_experts, 
+            top_k, 
+            dropout,
+            load_balancing_weight=load_balancing_weight,
+            use_credal_routing=use_credal_routing,
+            credal_lambda=credal_lambda
+        )
 
         # Normalization layers
         self.norm1 = nn.RMSNorm(d_model)
