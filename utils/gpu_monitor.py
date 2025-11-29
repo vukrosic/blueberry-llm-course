@@ -121,7 +121,7 @@ def main():
     
     # Check if nvidia-smi is available
     try:
-        subprocess.run(['nvidia-smi', '--version'], 
+        subprocess.run(['nvidia-smi', '--list-gpus'], 
                       capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         print("❌ nvidia-smi not found. This tool requires NVIDIA GPUs.")

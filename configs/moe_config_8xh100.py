@@ -6,36 +6,36 @@ from typing import Optional, Tuple
 class MoEModelConfig8xH100:
     """Configuration for 8x H100 GPUs with simple data parallelism"""
     
-    # Model architecture (same as base config)
-    d_model: int = 384
+    # Model architecture - ~300M total parameters
+    d_model: int = 512
     n_heads: int = 8
-    n_layers: int = 6
-    d_ff: int = 1536
+    n_layers: int = 12
+    d_ff: int = 2048     # 4x d_model
     use_mla: bool = False
     qk_rope_dim: int | None = 32
-    qk_nope_dim: int | None = 128
-    kv_lora_rank: int | None = 64
-    v_dim: int | None = 128
+    qk_nope_dim: int | None = 192
+    kv_lora_rank: int | None = 128
+    v_dim: int | None = 192
     
     # Training parameters - optimized for 8x H100
-    batch_size: int = 16  # Per GPU batch size
-    max_steps: int = 1000
+    batch_size: int = 64  # Per GPU batch size (512 effective across 8 GPUs)
+    max_steps: int = 5000  # More steps for larger model
     gradient_accumulation_steps: int = 1  # Not needed with 8 GPUs
     
     # Optimizer settings
-    muon_lr: float = 0.07
+    muon_lr: float = 0.06
     muon_momentum: float = 0.85
-    adamw_lr: float = 0.007
+    adamw_lr: float = 0.006
     warmup_ratio: float = 0.05
     
-    # Data parameters
-    max_seq_len: int = 512
-    num_documents: int = 10000
-    max_tokens: int = 500000
+    # Data parameters - balanced for fast training
+    max_seq_len: int = 768  # Moderate sequence length
+    num_documents: int = 20000  # Reasonable dataset size
+    max_tokens: int = 2000000  # 2M tokens
     
     # Evaluation
-    eval_every: int = 10
-    eval_steps: int = 100
+    eval_every: int = 50  # Less frequent for longer training
+    eval_steps: int = 200
     
     # Regularization
     weight_decay: float = 0.3
@@ -48,7 +48,7 @@ class MoEModelConfig8xH100:
     log_milestones: Tuple[int, ...] = (2000, 5000, 10000)
     
     # MoE specific parameters
-    num_experts: int = 8
+    num_experts: int = 8  # 1 per GPU
     expert_top_k: int = 2
     load_balancing_weight: float = 0.01
     

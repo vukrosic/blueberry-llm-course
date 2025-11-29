@@ -158,7 +158,8 @@ def train_moe_model_8xh100(
                     # No gradient accumulation needed with 8 GPUs
                     loss = total_loss
                 
-                scaler.scale(loss).backward()
+                # DataParallel returns a vector of losses, take mean for scalar
+                scaler.scale(loss.mean()).backward()
             else:
                 logits, aux_loss = model(x, return_aux_loss=True)
                 shift_logits = logits[:, :-1, :].contiguous()
@@ -173,7 +174,8 @@ def train_moe_model_8xh100(
                     total_loss = total_loss + aux_loss
                 
                 loss = total_loss
-                loss.backward()
+                # DataParallel returns a vector of losses, take mean for scalar
+                loss.mean().backward()
             
             # Optimizer step
             if config.use_amp:
@@ -200,13 +202,13 @@ def train_moe_model_8xh100(
                 with torch.no_grad():
                     predictions = logits.argmax(dim=-1)
                     accuracy = (predictions == y).float().mean().item()
-                    current_loss = ce_loss.item()
+                    current_loss = ce_loss.mean().item()
                     perplexity = math.exp(min(current_loss, 20))
                     current_lr = schedulers[0].get_last_lr()[0] if schedulers else optimizers[0].param_groups[0]['lr']
                 
                 pbar.set_postfix({
                     'loss': f'{current_loss:.4f}',
-                    'aux': f'{aux_loss.item() if aux_loss is not None else 0:.4f}',
+                    'aux': f'{aux_loss.mean().item() if aux_loss is not None else 0:.4f}',
                     'acc': f'{accuracy:.3f}',
                     'ppl': f'{perplexity:.1f}',
                     'lr': f'{current_lr:.5f}'
