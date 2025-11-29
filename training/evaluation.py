@@ -42,8 +42,12 @@ def evaluate_model(model: nn.Module, val_loader: DataLoader, config: MoEModelCon
                 attention_mask = attention_mask.to(device)
 
             with autocast('cuda', dtype=torch.float16, enabled=config.use_amp):
-                # MoE model evaluation
-                logits = model(x, return_aux_loss=False)  # Don't return aux loss during eval
+                # MoE model evaluation - model returns (logits, aux_loss) tuple
+                output = model(x)
+                if isinstance(output, tuple):
+                    logits = output[0]
+                else:
+                    logits = output
                 # Shift for causal LM: predict next token
                 shift_logits = logits[:, :-1, :].contiguous()
                 shift_labels = y[:, 1:].contiguous()

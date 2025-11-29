@@ -83,12 +83,19 @@ def main():
     logger.info(f"Split into {len(raw_train):,} train docs and {len(raw_val):,} val docs")
     
     # Tokenize and prepare datasets
-    def tokenize_and_prepare(dataset):
-        # Tokenize
+    def tokenize_and_prepare(dataset, split_name):
+        # Tokenize with caching
         def tokenize_fn(examples):
             return tokenizer(examples["text"], truncation=False, padding=False)
         
-        tokenized = dataset.map(tokenize_fn, batched=True, remove_columns=dataset.column_names)
+        cache_file = f"./data_cache/tokenized_{split_name}_{config.num_documents}_{config.max_seq_len}.cache"
+        tokenized = dataset.map(
+            tokenize_fn, 
+            batched=True, 
+            remove_columns=dataset.column_names,
+            cache_file_name=cache_file,
+            desc=f"Tokenizing {split_name}"
+        )
         
         # Group into fixed-length sequences
         def group_texts(examples):
@@ -105,13 +112,20 @@ def main():
             result["labels"] = result["input_ids"].copy()
             return result
         
-        grouped = tokenized.map(group_texts, batched=True)
+        cache_file_grouped = f"./data_cache/grouped_{split_name}_{config.num_documents}_{config.max_seq_len}.cache"
+        grouped = tokenized.map(
+            group_texts, 
+            batched=True,
+            cache_file_name=cache_file_grouped,
+            desc=f"Grouping {split_name}"
+        )
         grouped.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
         return grouped
     
-    print("Tokenizing datasets...")
-    train_ds = tokenize_and_prepare(raw_train)
-    val_ds = tokenize_and_prepare(raw_val)
+    print("Tokenizing datasets (cached)...")
+    os.makedirs("./data_cache", exist_ok=True)
+    train_ds = tokenize_and_prepare(raw_train, "train")
+    val_ds = tokenize_and_prepare(raw_val, "val")
     logger.info(f"Train sequences: {len(train_ds):,}, Val sequences: {len(val_ds):,}")
 
     # Data loaders - increase num_workers for multi-GPU

@@ -18,7 +18,7 @@ class MoEModelConfig8xH100:
     v_dim: int | None = 192
     
     # Training parameters - optimized for 8x H100
-    batch_size: int = 64  # Per GPU batch size (512 effective across 8 GPUs)
+    batch_size: int = 96  # Per GPU batch size (768 effective across 8 GPUs)
     max_steps: int = 5000  # More steps for larger model
     gradient_accumulation_steps: int = 1  # Not needed with 8 GPUs
     
