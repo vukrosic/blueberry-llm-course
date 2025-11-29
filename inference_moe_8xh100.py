@@ -70,7 +70,7 @@ def generate_text(model, tokenizer, prompt, max_length=100, temperature=1.0, top
 
 def main():
     # Configuration
-    checkpoint_path = "./checkpoints/step_400.pt"  # Change this to your checkpoint
+    checkpoint_path = "./checkpoints/final_model_8xh100.pt"  # Final checkpoint
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     # Load tokenizer
