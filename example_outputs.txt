@@ -1,0 +1,29 @@
+Output after just 5 minutes of training on 8xh100
+It would probably take a few hours on the free Google Colab T4 for the same results.
+
+======================================================================
+🤖 MoE Model Inference - Type 'quit' to exit
+======================================================================
+
+📝 Generating samples from preset prompts...
+
+Prompt: The future of artificial intelligence
+Generated: The future of artificial intelligence and machine learning has expanded the possibilities for enhancing machine learning models. Embracing these ideas will undoubtedly pave the way for a brighter future where all voices are heard—its a testament to human ingenuity and ingenuity. Course Unit: Understanding Different Types of Words
+
+Welcome to our exciting course unit where we will explore what words mean and how they work! You might think that words sound like a little bit complicated or
+----------------------------------------------------------------------
+Prompt: Once upon a time, in a distant galaxy
+Generated: Once upon a time, in a distant galaxy, lived an incredible little girl named Lucy. As she explored the world around her, she noticed that humans were often humans called humans. Humans can't understand a little girl, but they all had unique ways of communicating.
+
+One day, Lucy asked her mom, "Why would anyone get to play so much?"
+
+"Well," she replied, "Well, when our brains produce energy
+----------------------------------------------------------------------
+Prompt: The key to success is
+Generated: The key to success is in this field.
+
+At the core of any successful field lies the foundation of any successful aspiring business. According to Kiddi et al. (2013), a company has established the foundation for the country's success in the world. This includes all stakeholders – employers, employers, employees, and customers – and to ensure that all stakeholders have access to the necessary resources. By investing
+----------------------------------------------------------------------
+Prompt: In the field of medicine,
+Generated: In the field of medicine, there are countless ways to create these substances, including those that affect the quality of life. One such method is called "acacoustic superconductors," which have been employed to generate a variety of kinds of compounds that can be used to enhance the quality of the natural product. However, they are some of these supercapacitors that can be used to create new products. This chapter will explore why some
+----------------------------------------------------------------------
