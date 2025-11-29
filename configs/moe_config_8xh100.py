@@ -19,7 +19,7 @@ class MoEModelConfig8xH100:
     
     # Training parameters - optimized for 8x H100
     batch_size: int = 96  # Per GPU batch size (768 effective across 8 GPUs)
-    max_steps: int = 5000  # More steps for larger model
+    max_steps: int = 400  # Training steps
     gradient_accumulation_steps: int = 1  # Not needed with 8 GPUs
     
     # Optimizer settings
@@ -34,7 +34,7 @@ class MoEModelConfig8xH100:
     max_tokens: int = 2000000  # 2M tokens
     
     # Evaluation
-    eval_every: int = 50  # Less frequent for longer training
+    eval_every: int = 100  # Evaluate and save checkpoint every 100 steps
     eval_steps: int = 200
     
     # Regularization

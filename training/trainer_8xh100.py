@@ -2,6 +2,7 @@
 8x H100 GPU trainer using PyTorch DataParallel
 Simple and straightforward data parallelism across 8 H100 GPUs
 """
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -214,7 +215,7 @@ def train_moe_model_8xh100(
                     'lr': f'{current_lr:.5f}'
                 })
             
-            # Evaluation
+            # Evaluation and Checkpointing
             if step % config.eval_every == 0 and step > 0:
                 eval_metrics = evaluate_model(model, val_loader, config)
                 elapsed_time = (time.time() - train_start_time) / 60
@@ -224,6 +225,46 @@ def train_moe_model_8xh100(
                       f"Val Acc: {eval_metrics['val_accuracy']:.4f}, "
                       f"Val PPL: {eval_metrics['val_perplexity']:.2f}, "
                       f"LR: {current_lr:.5f}")
+                
+                # Save checkpoint
+                os.makedirs("./checkpoints", exist_ok=True)
+                ckpt_path = f"./checkpoints/step_{step}.pt"
+                model_to_save = model.module if isinstance(model, nn.DataParallel) else model
+                torch.save({
+                    'step': step,
+                    'model_state_dict': model_to_save.state_dict(),
+                    'optimizer_states': [opt.state_dict() for opt in optimizers],
+                    'scheduler_states': [sch.state_dict() for sch in schedulers],
+                    'config': config,
+                    'metrics': eval_metrics,
+                }, ckpt_path)
+                print(f"💾 Checkpoint saved: {ckpt_path}")
+                
+                # Generate sample text
+                print("\n🎯 Generating sample text...")
+                model.eval()
+                with torch.no_grad():
+                    prompt = "The future of artificial intelligence"
+                    # Simple greedy generation
+                    from transformers import AutoTokenizer
+                    tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM-135M", cache_dir="./hf_cache")
+                    input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+                    generated = input_ids
+                    
+                    for _ in range(50):  # Generate 50 tokens
+                        output = model(generated)
+                        if isinstance(output, tuple):
+                            logits = output[0]
+                        else:
+                            logits = output
+                        next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+                        generated = torch.cat([generated, next_token], dim=1)
+                    
+                    generated_text = tokenizer.decode(generated[0], skip_special_tokens=True)
+                    print(f"Prompt: {prompt}")
+                    print(f"Generated: {generated_text}")
+                    print()
+                model.train()
             
             step += 1
             if step % 20 == 0:
