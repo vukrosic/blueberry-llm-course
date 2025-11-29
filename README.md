@@ -2,6 +2,9 @@
 
 **Open Superintelligence Lab** - Open research for everyone. We publish all of our research for the sake of accelerating science. Learn real AI research from a real research lab.
 
+## Run on Google Colab
+[Open Google Colab](https://colab.research.google.com/drive/1QaIM941ShWBfrVbGfmgfmFTRBycBxdZu?usp=sharing)
+
 ## Quick Start
 
 ```bash
